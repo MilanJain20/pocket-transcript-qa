@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pocket Transcript QA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,480;6..72,600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --paper: #e6e0d2;
+      --panel: #f6f3ea;
+      --ink: #1c1914;
+      --muted: #5e584c;
+      --line: #cbbfa8;
+      --pass: #1d6b43;
+      --pass-bg: #e5f2ea;
+      --block: #9d2c1c;
+      --block-bg: #f8e6e1;
+      --warn: #8a5a12;
+      --shadow: 0 16px 40px rgba(40, 32, 18, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(1200px 400px at 10% -10%, rgba(157, 44, 28, 0.08), transparent 50%),
+        var(--paper);
+      color: var(--ink);
+      font-family: "Newsreader", Georgia, serif;
+      font-size: 18px;
+      line-height: 1.45;
+    }
+    header, main { width: min(1120px, calc(100% - 32px)); margin: 0 auto; }
+    header { padding: 28px 0 8px; }
+    body.play header { padding: 12px 0 4px; }
+    body.play h1 { font-size: 36px; }
+    body.play .lede { display: none; }
+    body.play .decision { font-size: 56px; }
+    body.play .scores { margin: 6px 0; }
+    body.play .score { padding: 6px 8px; }
+    body.play .score b { font-size: 18px; }
+    body.play th, body.play td { padding: 5px 6px; }
+    #caption {
+      display: none;
+      margin: 0 0 12px;
+      padding: 8px 12px;
+      background: #1c1914;
+      color: #f6f3ea;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 16px;
+    }
+    body.play #caption { display: block; }
+    .kicker {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    h1 { font-weight: 600; font-size: clamp(40px, 6vw, 64px); line-height: 0.95; margin: 8px 0; letter-spacing: -0.03em; }
+    .lede { max-width: 68ch; margin: 0 0 12px; }
+    .banner {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      padding: 10px 12px;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .layout { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; padding: 18px 0 48px; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+    h2 { font-size: 22px; margin: 0 0 10px; }
+    label { display: block; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; margin: 12px 0 6px; }
+    textarea, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #fffdf8;
+      color: var(--ink);
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 13px;
+      padding: 10px;
+    }
+    textarea { min-height: 180px; resize: vertical; }
+    .samples { display: flex; flex-wrap: wrap; gap: 8px; }
+    button {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 13px;
+      border: 1px solid var(--ink);
+      background: var(--ink);
+      color: var(--paper);
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+    button.secondary { background: transparent; color: var(--ink); }
+    button:disabled { opacity: 0.55; cursor: wait; }
+    .row { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+    .decision {
+      font-size: 42px;
+      line-height: 1;
+      letter-spacing: -0.04em;
+      margin: 0;
+    }
+    .pass { color: var(--pass); }
+    .block { color: var(--block); }
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 12px;
+    }
+    .pill.pass { background: var(--pass-bg); }
+    .pill.block { background: var(--block-bg); }
+    .pill.entailed { background: var(--pass-bg); color: var(--pass); }
+    .pill.unsupported, .pill.contradicted { background: var(--block-bg); color: var(--block); }
+    ul { margin: 8px 0 0; padding-left: 18px; }
+    table { width: 100%; border-collapse: collapse; font-size: 15px; }
+    th, td { text-align: left; vertical-align: top; border-top: 1px solid var(--line); padding: 8px 6px; }
+    th { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+    .evidence { color: var(--muted); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; }
+    .steps { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+    .step { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; border: 1px solid var(--line); padding: 4px 6px; }
+    .empty, .error, .loading { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; }
+    .error { color: var(--block); }
+    .scores { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 12px 0; }
+    .score { border: 1px solid var(--line); padding: 8px; }
+    .score b { display: block; font-size: 20px; }
+    .score span { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; color: var(--muted); }
+    @media (max-width: 860px) {
+      .layout { grid-template-columns: 1fr; }
+      h1 { font-size: 40px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="kicker">Milan Jain · Applied AI Engineer · independent project</div>
+    <h1>Pocket Transcript QA</h1>
+    <p class="lede">A release gate for voice transcripts and the summaries written from them. Claims are checked against the words that were actually transcribed. Fabricated spans and speaker mix-ups stop the note before a person sees it.</p>
+    <div class="banner">Independent project. Not affiliated with or endorsed by Pocket. The Pocket client in this demo is a mock.</div>
+    <p id="caption"></p>
+  </header>
+  <main class="layout">
+    <section class="panel">
+      <h2>Recording</h2>
+      <div class="samples" id="samples"></div>
+      <label for="summary">Summary</label>
+      <textarea id="summary" spellcheck="false"></textarea>
+      <label for="transcript">Transcript · Name | start | end | utterance</label>
+      <textarea id="transcript" spellcheck="false"></textarea>
+      <label for="audio">Audio fixture</label>
+      <select id="audio">
+        <option value="">No audio</option>
+        <option value="silence">Synthetic silence</option>
+        <option value="speech">Synthetic speech-like energy</option>
+      </select>
+      <div class="row">
+        <button id="run" type="button">Run release gate</button>
+        <button id="clear" class="secondary" type="button">Clear</button>
+      </div>
+    </section>
+    <section class="panel" id="result">
+      <h2>Gate</h2>
+      <p class="empty" id="placeholder">Load a sample or paste a transcript, then run the gate.</p>
+    </section>
+  </main>
+  <script>
+    const summaryEl = document.querySelector("#summary");
+    const transcriptEl = document.querySelector("#transcript");
+    const audioEl = document.querySelector("#audio");
+    const resultEl = document.querySelector("#result");
+    const runEl = document.querySelector("#run");
+    let samples = [];
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+    }
+
+    function pill(label) {
+      return `<span class="pill ${escapeHtml(label).toLowerCase()}">${escapeHtml(label)}</span>`;
+    }
+
+    function renderReport(report) {
+      const decision = report.gate.decision;
+      const reasons = report.gate.reasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("");
+      const steps = (report.pipeline || []).map((step) => `<span class="step">${escapeHtml(step.name)}</span>`).join("");
+      const scores = Object.entries(report.gate.scores).map(([key, value]) => {
+        const shown = Number.isInteger(value) ? value : Number(value).toFixed(2);
+        return `<div class="score"><b>${escapeHtml(shown)}</b><span>${escapeHtml(key)}</span></div>`;
+      }).join("");
+      const claims = report.summary.claims.length
+        ? `<table><thead><tr><th>Claim</th><th>Label</th><th>Evidence</th></tr></thead><tbody>${
+            report.summary.claims.map((claim) => `<tr><td>${escapeHtml(claim.claim)}</td><td>${pill(claim.label)}</td><td class="evidence">${escapeHtml(claim.evidence || claim.rationale)}</td></tr>`).join("")
+          }</tbody></table>`
+        : `<p class="empty">No atomic claims.</p>`;
+      const fabrications = report.transcript.flags.length
+        ? `<ul>${report.transcript.flags.map((flag) => `<li><strong>${escapeHtml(flag.kind)}</strong> · ${escapeHtml(flag.message)}</li>`).join("")}</ul>`
+        : `<p class="empty">No fabrication flags.</p>`;
+      const speakers = report.speakers.flags.length
+        ? `<ul>${report.speakers.flags.map((flag) => `<li><strong>${escapeHtml(flag.kind)}</strong> · ${escapeHtml(flag.message)}</li>`).join("")}</ul>`
+        : `<p class="empty">No speaker flags.</p>`;
+      resultEl.innerHTML = `
+        <h2>Gate</h2>
+        <p class="decision ${decision === "PASS" ? "pass" : "block"}">${escapeHtml(decision)}</p>
+        <div class="steps">${steps}</div>
+        <div class="scores">${scores}</div>
+        <ul>${reasons}</ul>
+        <h2>Claims</h2>
+        ${claims}
+        <h2>Transcript</h2>
+        ${fabrications}
+        <h2>Speakers</h2>
+        ${speakers}
+      `;
+    }
+
+    function showError(message) {
+      resultEl.innerHTML = `<h2>Gate</h2><p class="error">${escapeHtml(message)}</p>`;
+    }
+
+    async function loadSamples() {
+      const response = await fetch("/v1/samples");
+      if (!response.ok) throw new Error("Could not load samples.");
+      const payload = await response.json();
+      samples = payload.samples;
+      const host = document.querySelector("#samples");
+      host.innerHTML = "";
+      for (const sample of samples) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "secondary";
+        button.textContent = sample.title;
+        button.addEventListener("click", () => {
+          summaryEl.value = sample.summary;
+          transcriptEl.value = sample.transcript_text;
+          audioEl.value = sample.audio_id || "";
+          resultEl.innerHTML = `<h2>Gate</h2><p class="empty">${escapeHtml(sample.description)}</p>`;
+        });
+        host.appendChild(button);
+      }
+    }
+
+    function parseLines(text) {
+      const segments = [];
+      for (const line of text.split("\n")) {
+        if (!line.trim()) continue;
+        const parts = line.split("|").map((part) => part.trim());
+        if (parts.length !== 4) {
+          throw new Error("Each transcript line needs Name | start | end | utterance.");
+        }
+        const start = Number(parts[1]);
+        const end = Number(parts[2]);
+        if (Number.isNaN(start) || Number.isNaN(end)) throw new Error("Timestamps must be numbers.");
+        segments.push({
+          speaker: parts[0],
+          speaker_name: parts[0],
+          text: parts[3],
+          start,
+          end,
+        });
+      }
+      if (!segments.length) throw new Error("Add at least one transcript line.");
+      return segments;
+    }
+
+    document.querySelector("#run").addEventListener("click", async () => {
+      runEl.disabled = true;
+      resultEl.innerHTML = `<h2>Gate</h2><p class="loading">Checking claims, audio energy, and speaker labels…</p>`;
+      try {
+        const payload = {
+          summary: summaryEl.value,
+          transcript: parseLines(transcriptEl.value),
+          provider: "offline",
+        };
+        if (audioEl.value) payload.audio_id = audioEl.value;
+        const response = await fetch("/v1/evaluate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || body.detail || "The check failed.");
+        renderReport(body);
+      } catch (error) {
+        showError(error.message || "The check failed.");
+      } finally {
+        runEl.disabled = false;
+      }
+    });
+
+    document.querySelector("#clear").addEventListener("click", () => {
+      summaryEl.value = "";
+      transcriptEl.value = "";
+      audioEl.value = "";
+      resultEl.innerHTML = `<h2>Gate</h2><p class="empty">Load a sample or paste a transcript, then run the gate.</p>`;
+    });
+
+    const play = new URLSearchParams(location.search).get("play") === "1";
+    if (play) document.body.classList.add("play");
+
+    function setCaption(text) {
+      document.querySelector("#caption").textContent = text;
+    }
+
+    function wait(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    async function runCurrent() {
+      document.querySelector("#run").click();
+      for (let i = 0; i < 40; i += 1) {
+        await wait(150);
+        if (document.querySelector(".decision")) return;
+      }
+    }
+
+    async function playDemo() {
+      setCaption("Clean synthetic recording. A grounded summary should pass the gate.");
+      const clean = samples.find((item) => item.id === "rec_demo_standup");
+      summaryEl.value = clean.summary;
+      transcriptEl.value = clean.transcript_text;
+      audioEl.value = "";
+      await wait(700);
+      await runCurrent();
+      setCaption("PASS. Every claim is entailed. No fabrication. No speaker error.");
+      await wait(10000);
+      setCaption("Faulty note. Look for an unsupported claim, a fabricated segment, and a wrong speaker.");
+      const faulty = samples.find((item) => item.id === "sample_faulty_all");
+      summaryEl.value = faulty.summary;
+      transcriptEl.value = faulty.transcript_text;
+      audioEl.value = "";
+      await wait(600);
+      await runCurrent();
+      setCaption("BLOCK. Unsupported claim with the 12000 evidence span, filler hallucination, wrong speaker.");
+      const speakers = [...document.querySelectorAll("h2")].find((node) => node.textContent === "Speakers");
+      if (speakers) speakers.scrollIntoView({ block: "nearest" });
+      await wait(16000);
+      location.href = "/readme?play=1";
+    }
+
+    loadSamples()
+      .then(() => { if (play) return playDemo(); })
+      .catch((error) => showError(error.message));
+  </script>
+</body>
+</html>

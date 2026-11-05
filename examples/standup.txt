@@ -1,0 +1,3 @@
+Alice | 0.00 | 3.40 | We should ship the release on Friday.
+Bob | 3.80 | 7.60 | The budget for the launch is 12000 dollars.
+Alice | 8.00 | 11.40 | I will send the test plan by Thursday.
