@@ -34,6 +34,24 @@
     }
     header, main { width: min(1120px, calc(100% - 32px)); margin: 0 auto; }
     header { padding: 28px 0 8px; }
+    body.play header { padding: 12px 0 4px; }
+    body.play h1 { font-size: 36px; }
+    body.play .lede { display: none; }
+    body.play .decision { font-size: 56px; }
+    body.play .scores { margin: 6px 0; }
+    body.play .score { padding: 6px 8px; }
+    body.play .score b { font-size: 18px; }
+    body.play th, body.play td { padding: 5px 6px; }
+    #caption {
+      display: none;
+      margin: 0 0 12px;
+      padding: 8px 12px;
+      background: #1c1914;
+      color: #f6f3ea;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 16px;
+    }
+    body.play #caption { display: block; }
     .kicker {
       font-family: "IBM Plex Mono", ui-monospace, monospace;
       font-size: 12px;
@@ -126,7 +144,8 @@
     <div class="kicker">Milan Jain · Applied AI Engineer · independent project</div>
     <h1>Pocket Transcript QA</h1>
     <p class="lede">A release gate for voice transcripts and the summaries written from them. Claims are checked against the words that were actually transcribed. Fabricated spans and speaker mix-ups stop the note before a person sees it.</p>
-    <div class="banner">Not affiliated with or endorsed by Pocket. The sample recordings on this page are synthetic, and the Pocket client behind them is a mock. Offline checks need no API key.</div>
+    <div class="banner">Independent project. Not affiliated with or endorsed by Pocket. The Pocket client in this demo is a mock.</div>
+    <p id="caption"></p>
   </header>
   <main class="layout">
     <section class="panel">
@@ -286,7 +305,52 @@
       resultEl.innerHTML = `<h2>Gate</h2><p class="empty">Load a sample or paste a transcript, then run the gate.</p>`;
     });
 
-    loadSamples().catch((error) => showError(error.message));
+    const play = new URLSearchParams(location.search).get("play") === "1";
+    if (play) document.body.classList.add("play");
+
+    function setCaption(text) {
+      document.querySelector("#caption").textContent = text;
+    }
+
+    function wait(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    async function runCurrent() {
+      document.querySelector("#run").click();
+      for (let i = 0; i < 40; i += 1) {
+        await wait(150);
+        if (document.querySelector(".decision")) return;
+      }
+    }
+
+    async function playDemo() {
+      setCaption("Clean synthetic recording. A grounded summary should pass the gate.");
+      const clean = samples.find((item) => item.id === "rec_demo_standup");
+      summaryEl.value = clean.summary;
+      transcriptEl.value = clean.transcript_text;
+      audioEl.value = "";
+      await wait(700);
+      await runCurrent();
+      setCaption("PASS. Every claim is entailed. No fabrication. No speaker error.");
+      await wait(10000);
+      setCaption("Faulty note. Look for an unsupported claim, a fabricated segment, and a wrong speaker.");
+      const faulty = samples.find((item) => item.id === "sample_faulty_all");
+      summaryEl.value = faulty.summary;
+      transcriptEl.value = faulty.transcript_text;
+      audioEl.value = "";
+      await wait(600);
+      await runCurrent();
+      setCaption("BLOCK. Unsupported claim with the 12000 evidence span, filler hallucination, wrong speaker.");
+      const speakers = [...document.querySelectorAll("h2")].find((node) => node.textContent === "Speakers");
+      if (speakers) speakers.scrollIntoView({ block: "nearest" });
+      await wait(16000);
+      location.href = "/readme?play=1";
+    }
+
+    loadSamples()
+      .then(() => { if (play) return playDemo(); })
+      .catch((error) => showError(error.message));
   </script>
 </body>
 </html>

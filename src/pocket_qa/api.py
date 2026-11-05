@@ -14,6 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, field_validator
 
 from pocket_qa import __version__
+from pocket_qa.demo_pages import readme_page, title_card
 from pocket_qa.evaluate import evaluate
 from pocket_qa.models import EvaluationReport, GateThresholds, ProviderName, Segment
 from pocket_qa.pocket.errors import PocketNotFoundError
@@ -146,7 +147,16 @@ def create_app(
             )
         items.append(_silence_sample())
         items.append(_speaker_sample())
+        items.append(_combined_fault_sample())
         return {"samples": items, "mock": True}
+
+    @app.get("/readme", response_class=HTMLResponse)
+    def readme(play: int = 0) -> str:
+        return readme_page(play=bool(play))
+
+    @app.get("/demo/card", response_class=HTMLResponse)
+    def demo_card(step: str = "open", play: int = 0) -> str:
+        return title_card(step, play=bool(play))
 
     @app.get("/v1/pocket/recordings")
     def list_mock_recordings() -> dict[str, object]:
@@ -260,6 +270,50 @@ def _silence_sample() -> dict[str, object]:
         "transcript": [segment.model_dump() for segment in segments],
         "transcript_text": format_transcript(segments),
         "audio_id": "silence",
+        "mock": True,
+    }
+
+
+def _combined_fault_sample() -> dict[str, object]:
+    """One synthetic note that trips claim, fabrication, and speaker checks together."""
+    segments = [
+        Segment(
+            speaker="SPEAKER_00",
+            speaker_name="Alice",
+            text="We should ship the release on Friday.",
+            start=0.0,
+            end=3.4,
+        ),
+        Segment(
+            speaker="SPEAKER_01",
+            speaker_name="Bob",
+            text="The budget for the launch is 12000 dollars.",
+            start=3.8,
+            end=7.6,
+        ),
+        Segment(
+            speaker="SPEAKER_01",
+            speaker_name="Bob",
+            text="Thanks for watching.",
+            start=8.0,
+            end=9.4,
+        ),
+    ]
+    summary = (
+        "Alice said the budget for the launch is 12000 dollars. "
+        "The board approved a 4000000 dollar acquisition of Northwind Robotics."
+    )
+    return {
+        "id": "sample_faulty_all",
+        "title": "Faulty note: claim, fabrication, speaker",
+        "description": (
+            "Mock recording. The summary invents an acquisition, quotes Bob's budget as Alice's, "
+            "and the transcript contains 'Thanks for watching'. Expect BLOCK."
+        ),
+        "summary": summary,
+        "transcript": [segment.model_dump() for segment in segments],
+        "transcript_text": format_transcript(segments),
+        "audio_id": None,
         "mock": True,
     }
 

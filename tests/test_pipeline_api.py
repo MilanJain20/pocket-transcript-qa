@@ -67,6 +67,36 @@ def test_parse_pipe_format() -> None:
     assert request.summary.startswith("The team")
 
 
+def test_combined_sample_blocks_with_claim_fabrication_and_speaker() -> None:
+    client = TestClient(create_app())
+    samples = client.get("/v1/samples").json()["samples"]
+    sample = next(item for item in samples if item["id"] == "sample_faulty_all")
+    assert sample["mock"] is True
+    response = client.post(
+        "/v1/evaluate",
+        json={
+            "summary": sample["summary"],
+            "transcript": sample["transcript"],
+            "provider": "offline",
+            "title": sample["title"],
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["gate"]["decision"] == "BLOCK"
+    unsupported = [claim for claim in body["summary"]["claims"] if claim["label"] == "unsupported"]
+    assert unsupported
+    assert "12000" in unsupported[0]["evidence"]
+    assert any(flag["kind"] == "filler_hallucination" for flag in body["transcript"]["flags"])
+    assert any(flag["kind"] == "wrong_speaker_attribution" for flag in body["speakers"]["flags"])
+    readme = client.get("/readme")
+    assert readme.status_code == 200
+    assert "Not affiliated" in readme.text
+    assert "0.905" in readme.text
+    card = client.get("/demo/card?step=end")
+    assert "mock" in card.text
+
+
 def test_api_evaluate_and_samples() -> None:
     client = TestClient(create_app(webhook_secret="test-secret"))
     health = client.get("/health")

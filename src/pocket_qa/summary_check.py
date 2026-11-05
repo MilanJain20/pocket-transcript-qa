@@ -40,6 +40,16 @@ def _windows(segments: list[Segment]) -> list[tuple[str, set[str]]]:
     return windows
 
 
+def _shortest_span_with_number(segments: list[Segment]) -> str:
+    best = ""
+    best_len = 10**9
+    for text, _tokens in _windows(segments):
+        if numbers(text) and len(text) < best_len:
+            best = text
+            best_len = len(text)
+    return best
+
+
 def best_evidence(claim: str, segments: list[Segment]) -> tuple[str, float]:
     """Return the tightest transcript span with the highest content-token recall."""
     claim_tokens = set(content_tokens(claim))
@@ -79,11 +89,14 @@ def heuristic_judge(claim: str, segments: list[Segment]) -> ClaimJudgment:
                 rationale="The claim uses a number that is not in the transcript, "
                 "while the closest span uses a different number.",
             )
+        # Label stays unsupported. Quote a span that actually states a number
+        # so the reader can see the transcript's figure beside the claim.
+        number_span = _shortest_span_with_number(segments) or evidence
         return ClaimJudgment(
             claim=claim,
             label="unsupported",
             score=score,
-            evidence=evidence,
+            evidence=number_span,
             rationale="The claim contains a number that does not appear in the transcript.",
         )
 

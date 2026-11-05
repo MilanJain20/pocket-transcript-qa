@@ -6,6 +6,10 @@ Independent evaluation harness for voice transcripts and the summaries written f
 
 This project is not affiliated with, maintained by, or endorsed by [Pocket](https://heypocket.com). It does not ship a Pocket API key, and it does not call Pocket unless you point the live client at your own key.
 
+![A faulty synthetic note blocked by the release gate](docs/demo-poster.png)
+
+The still is from the local demo. The banner on that screen says this is an independent project and that the Pocket client in the demo is a mock. The benchmark table further down is unchanged.
+
 ## Problem
 
 A voice recorder is only as trustworthy as the note it hands back. A summary can add a budget, a decision, or a name that nobody said. A transcript can grow a sentence over a stretch of silence or a corrupted upload. A speaker label can flip in the middle of a sentence, and the summary can then quote the wrong person.
