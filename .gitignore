@@ -12,3 +12,9 @@ build/
 htmlcov/
 *.wav.tmp
 .DS_Store
+
+# Real recordings and the reports written from them.
+# pocket-qa recordings keeps these local. Do not commit them.
+recordings/
+my-recordings/
+reports/local/

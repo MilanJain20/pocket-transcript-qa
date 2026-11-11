@@ -6,7 +6,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-ProviderName = Literal["offline", "openai", "azure", "anthropic", "local-nli"]
+ProviderName = Literal["offline", "openai", "azure", "anthropic", "local-nli", "hybrid"]
+PROVIDER_NAMES: tuple[str, ...] = ("offline", "openai", "azure", "anthropic", "local-nli", "hybrid")
 ClaimLabel = Literal["entailed", "unsupported", "contradicted"]
 FabricationKind = Literal[
     "filler_hallucination",
