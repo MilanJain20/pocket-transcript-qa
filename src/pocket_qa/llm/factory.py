@@ -17,6 +17,6 @@ def build_llm(provider: str) -> LLMClient:
         return AnthropicClient()
     if provider == "offline":
         raise RuntimeError("The offline provider does not call a model.")
-    if provider == "local-nli":
-        raise RuntimeError("local-nli is invoked from the summary checker, not the chat factory.")
+    if provider in {"local-nli", "hybrid"}:
+        raise RuntimeError(f"{provider} is invoked from the summary checker, not the chat factory.")
     raise ValueError(f"Unknown provider {provider!r}")
