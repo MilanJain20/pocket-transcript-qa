@@ -20,6 +20,15 @@ LOCAL_NOTICE = (
     "transcripts, or summaries, and it does not call Pocket. Do not commit "
     "the input files or a report that quotes them."
 )
+HOSTED_NOTICE = (
+    "Audio stays on this machine, but transcript text and summary claims are sent to the selected "
+    "model provider. This command does not call Pocket. Do not commit the input files or a report "
+    "that quotes them."
+)
+
+
+def notice_for_provider(provider: str) -> str:
+    return LOCAL_NOTICE if provider in {"offline", "local-nli", "hybrid"} else HOSTED_NOTICE
 
 TRANSCRIPT_NAMES = ("transcript.txt", "transcript.md", "transcript.json")
 SUMMARY_NAMES = ("summary.txt", "summary.md", "summary.json")
@@ -173,11 +182,11 @@ def discover_recordings(
 
 def write_report(path: Path, report: dict, *, source: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"notice": LOCAL_NOTICE, "source": source, "report": report}
+    payload = {"notice": notice_for_provider(report.get("provider", "offline")), "source": source, "report": report}
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
-def write_index(path: Path, rows: list[dict[str, str]]) -> None:
+def write_index(path: Path, rows: list[dict[str, str]], *, provider: str = "offline") -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"notice": LOCAL_NOTICE, "recordings": rows}
+    payload = {"notice": notice_for_provider(provider), "recordings": rows}
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")

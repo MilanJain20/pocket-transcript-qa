@@ -161,6 +161,12 @@
         <option value="silence">Synthetic silence</option>
         <option value="speech">Synthetic speech-like energy</option>
       </select>
+      <label for="provider">Claim grounding provider</label>
+      <select id="provider">
+        <option value="offline">Offline</option>
+        <option value="azure">Azure OpenAI</option>
+      </select>
+      <p class="evidence">Azure sends the transcript and summary claims to the configured endpoint.</p>
       <div class="row">
         <button id="run" type="button">Run release gate</button>
         <button id="clear" class="secondary" type="button">Clear</button>
@@ -175,6 +181,7 @@
     const summaryEl = document.querySelector("#summary");
     const transcriptEl = document.querySelector("#transcript");
     const audioEl = document.querySelector("#audio");
+    const providerEl = document.querySelector("#provider");
     const resultEl = document.querySelector("#result");
     const runEl = document.querySelector("#run");
     let samples = [];
@@ -280,7 +287,7 @@
         const payload = {
           summary: summaryEl.value,
           transcript: parseLines(transcriptEl.value),
-          provider: "offline",
+          provider: providerEl.value,
         };
         if (audioEl.value) payload.audio_id = audioEl.value;
         const response = await fetch("/v1/evaluate", {

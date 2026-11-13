@@ -1,14 +1,41 @@
 # Pocket Transcript QA
 
-Independent evaluation harness for voice transcripts and the summaries written from them.
+An independent prototype that checks voice transcripts and their summaries before a note is released.
 
 **Milan Jain · Applied AI Engineer**
 
-This project is not affiliated with, maintained by, or endorsed by [Pocket](https://heypocket.com). It does not ship a Pocket API key, and it does not call Pocket unless you point the live client at your own key.
+**Prototype, not a Pocket product.** This project is not affiliated with, maintained by, or endorsed by [Pocket](https://heypocket.com). The demo uses synthetic recordings and a mock Pocket client. The separate live client requires a Pocket API key.
 
-![A faulty synthetic note blocked by the release gate](docs/demo-poster.png)
+## What it does
 
-The still is from the local demo. The banner on that screen says this is an independent project and that the Pocket client in the demo is a mock. The benchmark table further down is unchanged.
+Given an **existing transcript and summary**, the prototype:
+
+1. Checks each summary claim against the transcript and labels it `entailed`, `unsupported`, or `contradicted`.
+2. Flags selected transcript problems, such as repeated phrases or text over near-silent audio.
+3. Flags selected speaker-label and attribution problems.
+4. Produces a **PASS** or **BLOCK** report with scores, reasons, and evidence.
+
+It does **not** record audio, transcribe speech, generate summaries, or automatically block notes in Pocket. Audio and speaker checks are heuristics, not proof that the transcript or attribution is correct.
+
+## Prototype screenshots
+
+These are real captures of the local demo using synthetic data and the **offline** provider. In the BLOCK case, the prototype flags an invented acquisition, a filler phrase, and a wrong speaker attribution.
+
+| Grounded example: PASS | Faulty example: BLOCK |
+| --- | --- |
+| ![Local demo showing a passing synthetic recording](docs/demo-pass.png) | ![Local demo showing a blocked synthetic recording](docs/demo-block.png) |
+
+[View the earlier desktop demo screenshot](docs/demo-poster.png).
+
+## How Pocket could use this
+
+The immediate use is as an **evaluation and triage tool**, not an automated production decision-maker:
+
+- **Regression testing:** run the same consented, human-labeled examples against different transcription or summarization versions and compare reports.
+- **Error triage:** inspect flagged claims, transcript spans, and speaker issues to help reviewers investigate failures.
+- **Release experiments:** try the gate in shadow mode first, measure false positives and missed errors, and calibrate thresholds before using its decisions.
+
+These are proposed uses, not evidence that Pocket has adopted the prototype. The current benchmark is synthetic; it does not establish accuracy on real Pocket recordings. Human review, a representative labeled dataset, privacy review, and production security would be needed before relying on it.
 
 ## Problem
 
@@ -44,18 +71,35 @@ flowchart TD
 
 The LangGraph pipeline is six nodes with one job each: `ingest`, `transcript_checks`, `summary_checks`, `speaker_checks`, `gate`, `report`. Offline runs do not call a model. `local-nli` and `hybrid` load an optional local cross-encoder and do not call a hosted API. If you select `openai`, `azure`, or `anthropic`, only the summary-grounding stage calls it, and a failed model call fails closed as `unsupported`.
 
+### Possible integration (not implemented)
+
+```mermaid
+flowchart LR
+  source["Recording pipeline<br/>transcript + summary"] --> adapter["Adapter<br/>prepare evaluation request"]
+  adapter --> qa["This prototype<br/>CLI or local API"]
+  qa --> report["Report<br/>claims, flags, PASS / BLOCK"]
+  report --> review["Human review and<br/>regression metrics"]
+  review -. "after validation and integration" .-> policy["Release policy"]
+```
+
+An adapter and any production release policy would need to be built separately. The existing webhook receiver can evaluate a documented payload, but it is not registered with Pocket and does not change Pocket's product.
+
 ## Quickstart
 
-Python 3.11 or newer. No API key.
+Python 3.11 or newer. Run these commands from the repository root. The default offline mode needs no API key.
 
 ```bash
+python -m venv .venv
+# macOS/Linux: source .venv/bin/activate
+# Windows PowerShell: .\.venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
-python scripts/generate_benchmark.py   # already frozen in data/benchmark
 pocket-qa evaluate --transcript examples/standup.txt --summary examples/standup.summary.txt
 pocket-qa evaluate --transcript examples/standup.txt --summary examples/faulty.summary.txt
 pocket-qa bench
 pocket-qa serve --host 127.0.0.1 --port 8741
 ```
+
+Open [the local demo](http://127.0.0.1:8741), select **Synthetic standup**, and click **Run release gate** to see a PASS. Select **Faulty note: claim, fabrication, speaker** to see a BLOCK. The faulty CLI example exits with code 1 because the gate blocked the note. The local API has no authentication; keep it on localhost.
 
 Optional local NLI. This is not the default, and CI does not install it. The first run downloads `cross-encoder/nli-deberta-v3-xsmall`. Later runs stay on disk. Transcripts are not sent to a model API.
 
@@ -66,9 +110,33 @@ pocket-qa evaluate --transcript examples/standup.txt --summary examples/faulty.s
 python scripts/compare_claim_support.py
 ```
 
-`POCKET_QA_PROVIDER` changes the CLI default (`offline`, `local-nli`, or `hybrid`). The FastAPI demo stays on `offline` unless a request sets `provider`.
+`POCKET_QA_PROVIDER` changes the CLI default. The FastAPI demo stays on `offline` unless you select another provider.
 
-Open [the local demo](http://127.0.0.1:8741). The faulty example exits 1, which is what you want in CI: the gate blocked the note.
+### Azure OpenAI gateway (optional)
+
+Install `pip install -e ".[azure]"`, then copy `.env.example` to `.env` and set
+`AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_DEPLOYMENT`, and
+`AZURE_OPENAI_API_VERSION`. Environment variables take precedence over `.env`.
+For a gateway requiring a custom CA bundle, set `AZURE_OPENAI_CA_BUNDLE` to the
+PEM file path (relative paths are relative to the repository). Keep the key
+and any private certificate material out of Git.
+
+Select `--provider azure` on the CLI or **Azure OpenAI** in the demo. This sends
+the transcript and individual summary claims to the configured endpoint; audio
+stays local. Only use recordings you are authorized to send. Model failures
+fail closed as unsupported claims, with the error type in the report.
+
+### Evaluate through the local API
+
+With the server running, send a synthetic example to `POST /v1/evaluate`:
+
+```bash
+curl -X POST http://127.0.0.1:8741/v1/evaluate \
+  -H "Content-Type: application/json" \
+  -d '{"transcript":[{"speaker":"Alice","speaker_name":"Alice","text":"We should ship the release on Friday.","start":0,"end":3.4}],"summary":"The team should ship the release on Friday.","provider":"offline"}'
+```
+
+Inspect `gate.decision` and `gate.reasons`, `summary.claims`, `transcript.flags`, and `speakers.flags` in the response. Set `provider` to `azure` only after configuring the gateway and approving the data transfer. The browser demo also has an explicit provider selector.
 
 ```bash
 pytest
@@ -177,7 +245,7 @@ I kept `hybrid` as an opt-in provider because, on these counts, it is ahead of `
 
 ## Run on your own recordings
 
-Real transcripts and summaries stay on this machine. `pocket-qa recordings` does not upload them, does not call Pocket, and does not need an API key. Do not commit the files or a report that quotes them. `recordings/`, `my-recordings/`, and `reports/local/` are in `.gitignore` for that reason.
+With the default offline provider, real transcripts and summaries stay on this machine and no API key is needed. A hosted provider sends transcript text and summary claims to that model provider; audio remains local. The command does not call Pocket. Do not commit the files or a report that quotes them. `recordings/`, `my-recordings/`, and `reports/local/` are in `.gitignore` for that reason.
 
 The synthetic examples are safe to commit. Your own exports are not.
 
@@ -190,7 +258,7 @@ pocket-qa recordings \
 pocket-qa recordings --input recordings --output reports/local
 ```
 
-The command prints a notice that the files stay local. Exit code 0 means every note PASS-ed. Exit code 1 means at least one note was BLOCK-ed. Exit code 2 is a bad path or a provider that is not installed.
+The command prints a privacy notice for the selected provider. Exit code 0 means every note PASS-ed. Exit code 1 means at least one note was BLOCK-ed. Exit code 2 is a bad path or a provider that is not installed.
 
 Folder layout:
 
@@ -205,7 +273,7 @@ recordings/
 
 `transcript.txt` uses `Name | start_seconds | end_seconds | utterance`, or a JSON list of segments. A JSON export may be a Pocket recording (`transcript.segments` plus `summarizations`), a documented webhook body, or this project's evaluate payload. Summary text is read from `summary.txt`, from `v2.summary.markdown` when that object is present, or from `summary.markdown`. If none of those is present, the summary is empty and the gate blocks it. The summary is not guessed from another field.
 
-`--provider` accepts `offline` (the default), `local-nli`, or `hybrid`. The report JSON repeats the local-only notice.
+`--provider` accepts `offline` (the default), `local-nli`, `hybrid`, `azure`, `openai`, or `anthropic`. The report JSON repeats the provider-specific privacy notice.
 
 ## What is real, and what is a mock
 

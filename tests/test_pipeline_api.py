@@ -3,6 +3,7 @@
 import json
 
 import httpx
+import pytest
 from fastapi.testclient import TestClient
 
 from pocket_qa.api import create_app
@@ -294,21 +295,82 @@ def test_openai_compatible_client_and_summary_provider(monkeypatch) -> None:
     assert report.claims[0].label == "contradicted"
 
 
-def test_azure_and_anthropic_request_shapes() -> None:
+def test_azure_request_shape(monkeypatch, tmp_path) -> None:
+    pytest.importorskip("langchain_openai")
+    pytest.importorskip("dotenv")
+    monkeypatch.setattr("pocket_qa.llm.azure.repo_root", lambda: tmp_path)
+    monkeypatch.delenv("AZURE_OPENAI_CA_BUNDLE", raising=False)
+
     def azure(request: httpx.Request) -> httpx.Response:
         assert "/openai/deployments/qa-deploy/chat/completions" in str(request.url)
         assert request.headers["api-key"] == "azure-key"
+        assert request.url.params["api-version"] == "2024-02-01"
+        body = json.loads(request.content)
+        assert body["temperature"] == 0
+        assert body.get("max_completion_tokens", body.get("max_tokens")) == 350
+        assert body["response_format"] == {"type": "json_object"}
+        assert [message["content"] for message in body["messages"]] == ["sys", "user"]
         content = json.dumps({"label": "entailed", "evidence": "q", "rationale": "ok", "score": 0.7})
-        return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
+        return httpx.Response(200, json={"choices": [{"message": {"role": "assistant", "content": content}}]})
 
     azure_client = AzureOpenAIClient(
         endpoint="https://example.openai.azure.com",
         api_key="azure-key",
         deployment="qa-deploy",
+        api_version="2024-02-01",
         transport=httpx.MockTransport(azure),
     )
     assert azure_client.complete_json("sys", "user")["label"] == "entailed"
 
+
+def test_azure_provider_through_api(monkeypatch, tmp_path) -> None:
+    pytest.importorskip("langchain_openai")
+    pytest.importorskip("dotenv")
+    monkeypatch.setattr("pocket_qa.llm.azure.repo_root", lambda: tmp_path)
+    monkeypatch.delenv("AZURE_OPENAI_CA_BUNDLE", raising=False)
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        content = json.dumps({"label": "entailed", "evidence": "Friday", "rationale": "supported", "score": 0.9})
+        return httpx.Response(200, json={"choices": [{"message": {"role": "assistant", "content": content}}]})
+
+    model = AzureOpenAIClient(
+        endpoint="https://example.test", api_key="test-key", deployment="test", transport=httpx.MockTransport(respond)
+    )
+    monkeypatch.setattr("pocket_qa.llm.factory.build_llm", lambda provider: model)
+    request = _request()
+    request.summary = "The team should ship the release on Friday."
+    request.provider = "azure"
+    response = TestClient(create_app()).post("/v1/evaluate", json=request.model_dump())
+    assert response.status_code == 200
+    assert response.json()["provider"] == "azure"
+    assert response.json()["summary"]["claims"][0]["label"] == "entailed"
+
+
+def test_azure_env_configuration_and_missing_certificate(monkeypatch, tmp_path) -> None:
+    pytest.importorskip("langchain_openai")
+    pytest.importorskip("dotenv")
+    monkeypatch.setattr("pocket_qa.llm.azure.repo_root", lambda: tmp_path)
+    for name in ("AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_DEPLOYMENT",
+                 "AZURE_OPENAI_API_VERSION", "AZURE_OPENAI_CA_BUNDLE"):
+        monkeypatch.delenv(name, raising=False)
+    (tmp_path / ".env").write_text(
+        "AZURE_OPENAI_ENDPOINT=https://example.test\n"
+        "AZURE_OPENAI_API_KEY=file-key\n"
+        "AZURE_OPENAI_DEPLOYMENT=file-deployment\n"
+        "AZURE_OPENAI_API_VERSION=2024-02-01\n"
+        "AZURE_OPENAI_CA_BUNDLE=missing.pem\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "env-deployment")
+    client = AzureOpenAIClient()
+    assert client.endpoint == "https://example.test"
+    assert client.deployment == "env-deployment"
+    assert client.api_version == "2024-02-01"
+    with pytest.raises(FileNotFoundError):
+        client.complete_json("sys", "user")
+
+
+def test_anthropic_request_shape() -> None:
     def anthropic(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/v1/messages"
         assert request.headers["x-api-key"] == "anthropic-key"

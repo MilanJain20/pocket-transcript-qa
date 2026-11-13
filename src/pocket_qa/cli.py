@@ -190,7 +190,8 @@ def recordings_cmd(
 ) -> None:
     """Evaluate local transcript and summary files and write a JSON report.
 
-    Files stay on this machine. Nothing is uploaded and nothing is sent to Pocket.
+    Hosted providers send transcript text and summary claims to the selected model.
+    Audio stays local, and nothing is sent to Pocket.
     Put real exports in recordings/ and write reports to reports/local/. Both paths
     are gitignored. Do not commit them.
 
@@ -201,15 +202,15 @@ def recordings_cmd(
     plus optional audio.wav. JSON files in the folder are read as exports.
     """
     from pocket_qa.local_recordings import (
-        LOCAL_NOTICE,
         discover_recordings,
         load_pair,
+        notice_for_provider,
         write_index,
         write_report,
     )
 
     selected = _resolve_provider(provider)
-    typer.echo(LOCAL_NOTICE, err=True)
+    typer.echo(notice_for_provider(selected), err=True)
     _warn_if_repo_output(output)
     try:
         if input_dir is not None and transcript is not None:
@@ -250,7 +251,7 @@ def recordings_cmd(
             blocked = blocked or report.gate.decision == "BLOCK"
             typer.echo(f"{recording_id}: {report.gate.decision} -> {destination}")
         if many:
-            write_index(output / "index.json", written)
+            write_index(output / "index.json", written, provider=selected)
     except (ValueError, RuntimeError, FileNotFoundError, OSError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc

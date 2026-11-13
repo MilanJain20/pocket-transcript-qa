@@ -20,6 +20,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8.3", "ruff>=0.6"]
 local-nli = ["sentence-transformers>=3.0"]
+azure = ["langchain-openai>=0.3,<2", "python-dotenv>=1.0"]
 
 [project.scripts]
 pocket-qa = "pocket_qa.cli:main"

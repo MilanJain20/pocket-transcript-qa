@@ -9,7 +9,7 @@ from typer.testing import CliRunner
 
 from pocket_qa.bench import latency_summary, render_comparison
 from pocket_qa.cli import app
-from pocket_qa.local_recordings import LOCAL_NOTICE, discover_recordings
+from pocket_qa.local_recordings import HOSTED_NOTICE, LOCAL_NOTICE, discover_recordings, write_index, write_report
 from pocket_qa.paths import repo_root
 
 runner = CliRunner()
@@ -104,6 +104,16 @@ def test_recordings_cli_folder_pass(tmp_path: Path) -> None:
     index = json.loads((out / "index.json").read_text(encoding="utf-8"))
     assert index["recordings"][0]["decision"] == "PASS"
     assert "Do not commit" in index["notice"]
+
+
+def test_hosted_recording_reports_disclose_transmission(tmp_path: Path) -> None:
+    report_path = tmp_path / "report.json"
+    index_path = tmp_path / "index.json"
+    write_report(report_path, {"provider": "azure"}, source="example")
+    write_index(index_path, [], provider="azure")
+    assert json.loads(report_path.read_text(encoding="utf-8"))["notice"] == HOSTED_NOTICE
+    assert json.loads(index_path.read_text(encoding="utf-8"))["notice"] == HOSTED_NOTICE
+    assert "sent to the selected model provider" in HOSTED_NOTICE
 
 
 def test_recordings_cli_rejects_an_empty_folder(tmp_path: Path) -> None:
